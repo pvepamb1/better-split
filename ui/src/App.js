@@ -6,8 +6,8 @@ import FileUpload from './components/FileUpload';
 import ExpenseTable from './components/ExpenseTable';
 import PayerSelector from './components/PayerSelector';
 import SplitwiseSelector from './components/SplitwiseSelector';
-import { fetchCategories, fetchCurrentUser, createExpenses } from './api';
-import { initializeExpenseSplitting, initializeSelectedCategories, toTitleCase, distributeRemainderCents } from './utils';
+import { fetchCategories, fetchCurrentUser, createExpensesOnBackend } from './api';
+import { initializeExpenseSplitting, initializeSelectedCategories } from './utils';
 
 function App() {
   const [lineItems, setLineItems] = useState([]);
@@ -30,16 +30,23 @@ function App() {
   }, []);
 
   const handleFileProcessed = (processedLineItems) => {
-    setLineItems(processedLineItems);
-    setExpenseSplitting(initializeExpenseSplitting(processedLineItems));
-    setSelectedCategories(initializeSelectedCategories(processedLineItems, categories));
+    const initializedLineItems = processedLineItems.map(item => ({
+      ...item,
+      selectedMemberIds: item.selectedMemberIds || [], // Ensure selectedMemberIds is an array
+    }));
+    
+    setLineItems(initializedLineItems);
+    setExpenseSplitting(initializeExpenseSplitting(initializedLineItems));
+    setSelectedCategories(initializeSelectedCategories(initializedLineItems, categories));
   };
 
   const handleAddExpense = () => {
     const newExpense = {
       description: '',
       cost: '0.00',
+      selectedMemberIds: [], // Initialize as an empty array
     };
+    
     setLineItems([...lineItems, newExpense]);
     setExpenseSplitting({
       ...expenseSplitting,
@@ -80,69 +87,34 @@ function App() {
 
   const handleCreateExpenses = async () => {
     try {
-      const expenses = lineItems.map((item, index) => {
-        // Get the members who are selected for this expense
-        let selectedMembers = splitwiseMembers.filter(member => expenseSplitting[index][member.id]);
+      // Filter out line items without selected members
+      const filteredLineItems = lineItems.filter(item => item.selectedMemberIds && item.selectedMemberIds.length > 0);
   
-        // If no members are selected, return null (we'll filter these out later)
-        if (selectedMembers.length === 0) {
-          return null;
-        }
-  
-        // Check if the payer is involved in the item
-        const payerInvolved = selectedMembers.some(member => member.id.toString() === payer.toString());
-  
-        // If the payer is not involved, add them with owed_share as 0.00
-        if (!payerInvolved) {
-          const payerMember = splitwiseMembers.find(member => member.id.toString() === payer.toString());
-          if (payerMember) {
-            selectedMembers = [...selectedMembers, payerMember];
-          }
-        }
-  
-        const totalOwedShare = parseFloat(item.cost);
-        const perPersonShare = (totalOwedShare / (payerInvolved ? selectedMembers.length : selectedMembers.length - 1)).toFixed(2);
-        
-        let owedShares = selectedMembers.map(member => 
-          (payerInvolved || member.id.toString() !== payer.toString()) ? perPersonShare : "0.00"
-        );
-        owedShares = distributeRemainderCents(owedShares, totalOwedShare);
-  
-        const users = selectedMembers.map((member, memberIndex) => ({
+      const requestData = filteredLineItems.map((item, index) => {
+        const selectedUsers = splitwiseMembers.filter(member => item.selectedMemberIds.includes(member.id)).map(member => ({
           user_id: member.id,
-          paid_share: member.id.toString() === payer.toString() ? item.cost : "0.00",
-          owed_share: owedShares[memberIndex]
+          // Additional user-specific data can be added here if needed
         }));
   
         return {
+          description: item.description,
           cost: item.cost,
-          description: toTitleCase(item.description),
-          date: expenseDate.toISOString().split('T')[0],
-          category_id: selectedCategories[index],
-          split_equally: false,
-          group_id: selectedGroupId,
-          users: users
+          date: expenseDate, // Assuming expenseDate is the same for all line items, or modify as needed
+          category_id: selectedCategories[index], // Get the selected category for each line item
+          users: selectedUsers,
+          payer: Number(payer), // Assuming the payer is the same for all line items, or modify as needed
+          group_id: selectedGroupId // Assuming the group ID is the same for all line items, or modify as needed
         };
-      }).filter(expense => expense !== null && expense.users.length > 0);
+      });
   
-      // If no valid expenses, show an error
-      if (expenses.length === 0) {
-        setError('No valid expenses to create. Please select members for at least one expense.');
+      if (requestData.length === 0) {
+        alert('No expenses with selected members to create.');
         return;
       }
   
-      // Double-check that the paid and owed amounts match for each expense
-      expenses.forEach(expense => {
-        const totalPaid = expense.users.reduce((sum, user) => sum + parseFloat(user.paid_share), 0);
-        const totalOwed = expense.users.reduce((sum, user) => sum + parseFloat(user.owed_share), 0);
-        
-        if (Math.abs(totalPaid - totalOwed) > 0.01) {
-          console.warn('Mismatch in expense:', expense);
-          throw new Error('Expense shares do not match the total cost');
-        }
-      });
+      const result = await createExpensesOnBackend(requestData);
   
-      await createExpenses(expenses);
+      // Handle the response from the backend
       alert('Expenses created successfully!');
     } catch (error) {
       console.error('Error creating expenses:', error);
@@ -153,14 +125,13 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>VeryFi Document Processor with Splitwise Integration</h1>
+        <h1>Better Split</h1>
       </header>
       <main>
         <FileUpload onFileProcessed={handleFileProcessed} />
         {error && <div className="error-message">{error}</div>}
         {lineItems.length > 0 && (
           <div className="result">
-            <h2>Extracted Line Items:</h2>
             <SplitwiseSelector onSelectionChange={handleSplitwiseSelection} />
             <div className="date-picker-container">
               <label htmlFor="expense-date">Expense Date: </label>

@@ -1,5 +1,6 @@
 package com.example.veryfi.controller;
 
+import com.example.veryfi.service.ExpenseCalculationService;
 import com.example.veryfi.service.SplitwiseClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,9 @@ public class SplitwiseController {
 
     @Autowired
     private SplitwiseClient splitwiseClient;
+
+    @Autowired
+    private ExpenseCalculationService expenseCalculationService;
 
     @GetMapping("/groups")
     public ResponseEntity<Map<String, Object>> getGroups() {
@@ -37,6 +41,7 @@ public class SplitwiseController {
 
     @PostMapping("/create-expenses")
     public ResponseEntity<List<Map<String, Object>>> createExpenses(@RequestBody List<Map<String, Object>> expenses) {
-        return ResponseEntity.ok(splitwiseClient.createExpenses(expenses));
+        List<Map<String, Object>> response = expenseCalculationService.processAndCreateExpenses(expenses);
+        return ResponseEntity.ok(response);
     }
 }

@@ -14,37 +14,51 @@ function ExpenseTable({
   onLineItemChange,
   onRemoveExpense
 }) {
-  const handleDescriptionChange = (index, newDescription) => {
-    onLineItemChange(prevItems => 
-      prevItems.map((item, i) => 
-        i === index ? { ...item, description: newDescription } : item
+  // Handle changes to the description field
+  const handleDescriptionChange = (itemIndex, newDescription) => {
+    onLineItemChange(prevItems =>
+      prevItems.map((item, i) =>
+        i === itemIndex ? { ...item, description: newDescription } : item
       )
     );
   };
 
-  const handleCostChange = (index, newCost) => {
-    onLineItemChange(prevItems => 
-      prevItems.map((item, i) => 
-        i === index ? { ...item, cost: newCost } : item
+  // Handle changes to the cost field
+  const handleCostChange = (itemIndex, newCost) => {
+    onLineItemChange(prevItems =>
+      prevItems.map((item, i) =>
+        i === itemIndex ? { ...item, cost: newCost } : item
       )
     );
   };
 
-  const handleCategoryChange = (index, categoryId) => {
-    onSelectedCategoriesChange(prevState => ({
-      ...prevState,
-      [index]: categoryId
+  // Handle changes to the category selection
+  const handleCategoryChange = (itemIndex, newCategoryId) => {
+    onSelectedCategoriesChange(prevCategories => ({
+      ...prevCategories,
+      [itemIndex]: parseInt(newCategoryId, 10)
     }));
   };
 
   const handleCheckboxChange = (itemIndex, memberId) => {
-    onExpenseSplittingChange(prevState => ({
-      ...prevState,
+    const updatedSplitting = {
+      ...expenseSplitting,
       [itemIndex]: {
-        ...prevState[itemIndex],
-        [memberId]: !prevState[itemIndex][memberId]
+        ...expenseSplitting[itemIndex],
+        [memberId]: !expenseSplitting[itemIndex][memberId]
       }
-    }));
+    };
+    onExpenseSplittingChange(updatedSplitting);
+  
+    const selectedMemberIds = Object.keys(updatedSplitting[itemIndex])
+      .filter(id => updatedSplitting[itemIndex][id])
+      .map(id => parseInt(id, 10));
+  
+    onLineItemChange(prevItems =>
+      prevItems.map((item, i) =>
+        i === itemIndex ? { ...item, selectedMemberIds: selectedMemberIds || [] } : item
+      )
+    );
   };
 
   return (

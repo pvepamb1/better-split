@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = '/api';
+
+// axios.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
 
 export const fetchCategories = async () => {
   const response = await axios.get(`${API_BASE_URL}/splitwise/categories`);
@@ -38,28 +40,7 @@ export const processDocument = async (file) => {
   return response.data;
 };
 
-// In api.js
-
-export const createExpenses = async (expenses) => {
-  const formattedExpenses = expenses.map(expense => ({
-    cost: expense.cost,
-    description: expense.description,
-    date: expense.date,
-    category_id: expense.category_id,
-    split_equally: expense.split_equally,
-    group_id: expense.group_id,
-    users: expense.users.map((user, index) => ({
-      user_id: user.user_id,
-      paid_share: user.paid_share,
-      owed_share: user.owed_share
-    }))
-  }));
-
-  const response = await axios.post(`${API_BASE_URL}/splitwise/create-expenses`, formattedExpenses, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+export const createExpensesOnBackend = async (requestData) => {
+  const response = await axios.post(`${API_BASE_URL}/splitwise/create-expenses`, requestData);
   return response.data;
 };
-
